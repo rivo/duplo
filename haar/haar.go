@@ -49,31 +49,33 @@ type Matrix struct {
 	Coefs []Coef
 
 	// The number of columns in the matrix.
-	Width int
+	Width uint
 
 	// The number of rows in the matrix.
-	Height int
+	Height uint
 }
 
-// colorToCoef converts a native Color type into a Coef slice, thereby
-// preserving the original colour space.
+// colorToCoef converts a native Color type into a YCbCr Coef. We are using
+// YCbCr because we only have weights for them. (Apart from the score weights,
+// the store is built to handle different sized Coef's so any length may be
+// returned.)
 func colorToCoef(gen color.Color) Coef {
+	var r, g, b uint8
 	switch spec := gen.(type) {
 	case color.Alpha:
-		return Coef{float64(spec.A)}
-	case color.Gray:
-		return Coef{float64(spec.Y)}
-	case color.Gray16:
-		return Coef{float64(spec.Y)}
+		return Coef{0, 0, 0}
 	case color.YCbCr:
 		return Coef{float64(spec.Y), float64(spec.Cb), float64(spec.Cr)}
+	case color.RGBA:
+		r, g, b = spec.R, spec.G, spec.B
 	default: // The rest is RGBA.
-		r, g, b, a := gen.RGBA()
-		return Coef{float64(r & 0xffff >> 8),
-			float64(g & 0xffff >> 8),
-			float64(b & 0xffff >> 8),
-			float64(a & 0xffff >> 8)}
+		r32, g32, b32, _ := gen.RGBA()
+		r = uint8(r32 & 0xffff >> 8)
+		g = uint8(g32 & 0xffff >> 8)
+		b = uint8(b32 & 0xffff >> 8)
 	}
+	y, cb, cr := color.RGBToYCbCr(r, g, b)
+	return Coef{float64(y), float64(cb), float64(cr)}
 }
 
 // Transform performs a foward 2D Haar transform on the provided image. The
@@ -92,8 +94,8 @@ func Transform(img image.Image) Matrix {
 	}
 	matrix := Matrix{
 		Coefs:  make([]Coef, width*height),
-		Width:  width,
-		Height: height}
+		Width:  uint(width),
+		Height: uint(height)}
 
 	// Convert colours to coefficients.
 	for row := bounds.Min.Y; row < bounds.Min.Y+height; row++ {
