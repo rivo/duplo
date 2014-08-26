@@ -2,7 +2,7 @@ package duplo
 
 // Match represents an image matched by a similarity query.
 type Match struct {
-	// The ID of the matched image, as specified in the duplo.Add() function.
+	// The ID of the matched image, as specified in the pool.Add() function.
 	ID interface{}
 
 	// The score calculated during the similarity query. The lower, the better
