@@ -28,10 +28,6 @@ var (
 		[6]float64{34.37, 0.36, 0.45, 0.14, 0.18, 0.27}}
 )
 
-// Any two image ratios which differ by less than this amount are considered
-// the same.
-const ratioThreshold = 0.1
-
 // Store is a data structure that holds references to images. It holds visual
 // hashes and references to the images but the images themselves are not held
 // in the data structure.
@@ -95,9 +91,10 @@ func (store *Store) Add(id interface{}, hash Hash) {
 	// Make this image a candidate.
 	index := len(store.candidates)
 	store.candidates = append(store.candidates, candidate{
-		id:        id,
-		scaleCoef: hash.Coefs[0],
-		ratio:     hash.Ratio})
+		id:           id,
+		scaleCoef:    hash.Coefs[0],
+		ratio:        hash.Ratio,
+		crossSection: hash.CrossSection})
 
 	// Distribute candidate index into the buckets.
 	for coefIndex, coef := range hash.Coefs {
@@ -128,10 +125,8 @@ func (store *Store) Add(id interface{}, hash Hash) {
 }
 
 // Query performs a similarity search on the given image hash and returns
-// all matches up to a maximum of n. The returned matches are sorted by their
-// score, best match first. If useRatio is set to true, matches with a different
-// ratio (width/height) are excluded from the search.
-func (store *Store) Query(hash Hash, useRatio bool, n int) []Match {
+// all potential matches, sorted by their score (best, i.e. lowest, first).
+func (store *Store) Query(hash Hash) []*Match {
 	store.RLock()
 	defer store.RUnlock()
 
@@ -140,9 +135,9 @@ func (store *Store) Query(hash Hash, useRatio bool, n int) []Match {
 		return nil
 	}
 
-	// Matches contains all candidates which were found in index buckets
+	// matchMap contains all candidates which were found in index buckets
 	// during the search.
-	matchMap := make(map[int]float64, TopCoefs)
+	matchMap := make(map[int]*Match, TopCoefs)
 
 	// Examine hash buckets.
 	for coefIndex, coef := range hash.Coefs {
@@ -166,20 +161,27 @@ func (store *Store) Query(hash Hash, useRatio bool, n int) []Match {
 			}
 
 			for _, index := range store.indices[sign][coefIndex][colourIndex] {
-				// Do we check the image ratio?
-				if useRatio && math.Abs(store.candidates[index].ratio-hash.Ratio) >= ratioThreshold {
-					// Yes, and it's a different one. This is not a match.
-					continue
-				}
-
 				// Do we know this index already?
 				if _, ok := matchMap[index]; !ok {
-					// No. Create it with the scaling function coefficient.
-					matchMap[index] = 0
+					// No. Calculate initial score.
+					score := 0.0
 					for colour := range coef {
-						matchMap[index] += weights[colour][0] *
+						score += weights[colour][0] *
 							math.Abs(store.candidates[index].scaleCoef[colour]-hash.Coefs[0][colour])
 					}
+
+					// Difference in image ratios.
+					ratioDiff := math.Abs(store.candidates[index].ratio - hash.Ratio)
+
+					// The hamming distance between the cross-section bit vectors.
+					hamming := hammingDistance(store.candidates[index].crossSection, hash.CrossSection)
+
+					// Add this match.
+					matchMap[index] = &Match{
+						store.candidates[index].id,
+						score,
+						ratioDiff,
+						hamming}
 				}
 
 				// At this point, we have an entry in matches. Simply subtract the
@@ -192,7 +194,7 @@ func (store *Store) Query(hash Hash, useRatio bool, n int) []Match {
 					if bin > 5 {
 						bin = 5
 					}
-					matchMap[index] -= weights[colour][bin]
+					matchMap[index].Score -= weights[colour][bin]
 				}
 			}
 		}
@@ -200,17 +202,12 @@ func (store *Store) Query(hash Hash, useRatio bool, n int) []Match {
 
 	// Make a sorted list of matches.
 	result := make(matches, 0, len(matchMap))
-	for index, score := range matchMap {
-		result = append(result, Match{store.candidates[index].id, score})
+	for _, match := range matchMap {
+		result = append(result, match)
 	}
 	sort.Sort(matches(result))
 
-	// Return up to n matches.
-	count := len(result)
-	if n < count {
-		count = n
-	}
-	return result[:count]
+	return result
 }
 
 // Size returns the number of images currently in the store.

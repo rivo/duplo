@@ -16,4 +16,7 @@ type candidate struct {
 
 	// ratio is image width / image height.
 	ratio float64
+
+	// The cross-section bit vector (see Hash for more information).
+	crossSection uint64
 }
