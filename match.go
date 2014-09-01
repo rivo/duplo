@@ -12,8 +12,14 @@ type Match struct {
 	// The absolute difference between the two image ratios.
 	RatioDiff float64
 
-	// The hamming distance between the two cross-sections.
-	HammingDistance int
+	// The hamming distance between the two dHash bit vectors.
+	DHashDistance int
+
+	// The hamming distance between the two histogram bit vectors.
+	HistogramDistance int
+
+	// The absolute difference between the two histogram maxima.
+	HistoMaxDiff float32
 }
 
 type matches []*Match

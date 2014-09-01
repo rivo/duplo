@@ -17,6 +17,12 @@ type candidate struct {
 	// ratio is image width / image height.
 	ratio float64
 
-	// The cross-section bit vector (see Hash for more information).
-	crossSection uint64
+	// The dHash bit vector (see Hash for more information).
+	dHash [2]uint64
+
+	// The histogram bit vector (see Hash for more information).
+	histogram uint64
+
+	// The histogram maximum (see Hash for more information).
+	histoMax [3]float32
 }

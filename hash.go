@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"math"
 	"math/rand"
+	"sort"
 )
 
 // Hash represents the visual hash of an image.
@@ -21,11 +22,20 @@ type Hash struct {
 	// Ratio is image width / image height or 0 if height is 0.
 	Ratio float64
 
-	// CrossSection is a 64 bit vector which represents a diagonal cross-section
-	// of the image, 32 bits for the Y colour space and 16 bits each for the Cb
-	// and Cr colour spaces. A bit is set when its pixel value is higher or equal
-	// than the average pixel value.
-	CrossSection uint64
+	// DHash is a 128 bit vector where each bit value depends on the monotonicity
+	// of two adjacent pixels. The first 64 bits are based on a 8x8 version of
+	// the Y colour channel. The other two 32 bits are each based on a 8x4 version
+	// of the Cb, and Cr colour channel, respectively.
+	DHash [2]uint64
+
+	// Histogram is histogram quantized into 64 bits (32 for Y and 16 each for
+	// Cb and Cr). A bit is set to 1 if the intensity's occurence count is large
+	// than the median (for that colour channel) and set to 0 otherwise.
+	Histogram uint64
+
+	// HistoMax is the maximum value of the histogram (for each channel Y, Cb,
+	// and Cr).
+	HistoMax [3]float32
 }
 
 // CreateHash calculates and returns the visual hash of the provided image.
@@ -48,10 +58,13 @@ func CreateHash(img image.Image) Hash {
 	// Find the kth largest coefficients for each colour channel.
 	thresholds := coefThresholds(matrix.Coefs, TopCoefs)
 
-	// Create the cross-section value.
-	bits := crossSection(img)
+	// Create the dHash bit vector.
+	d := dHash(img)
 
-	return Hash{haar.Matrix{matrix.Coefs, ImageScale, ImageScale}, thresholds, ratio, bits}
+	// Create histogram bit vector.
+	h, hm := histogram(img)
+
+	return Hash{haar.Matrix{matrix.Coefs, ImageScale, ImageScale}, thresholds, ratio, d, h, hm}
 }
 
 // coefThreshold returns, for the given coefficients, the kth largest absolute
@@ -99,64 +112,125 @@ func coefThresholds(coefs []haar.Coef, k int) haar.Coef {
 	return thresholds
 }
 
-// Computes a 64 bit vector by sampling a 32 pixel diagonal cross-section of
-// the image and setting the corresponding bit to 1 if it is higher or equal
-// to the average pixel value and to 0 if it is lower than the average pixel
-// value. We use 32 bits for the Y values and 16 bits for the Cb and Cr values
+// ycbcr returns the YCbCr values for the given colour, converting to them if
+// necessary.
+func ycbcr(colour color.Color) (y, cb, cr uint8) {
+	switch spec := colour.(type) {
+	case color.YCbCr:
+		return spec.Y, spec.Cb, spec.Cr
+	default:
+		r, g, b, _ := colour.RGBA()
+		return color.RGBToYCbCr(uint8(r), uint8(g), uint8(b))
+	}
+}
+
+// dHash computes a 128 bit vector by comparing adjacent pixels of a downsized
+// version of img. The first 64 bits correspond to a 8x8 version of the Y colour
+// channel. A bit is set to 1 if a pixel value is higher than that of its left
+// neighbour (the first bit is 1 if its colour value is > 0.5). The other two 32
+// bits correspond to the Cb and Cr colour channels, based on a 8x4 version
 // each.
-func crossSection(img image.Image) (bits uint64) {
-	// Resize the image so we have 32 pixels in each diagonal.
-	// We use 32 bits for Y, and 16 bits each for Cb and Cr. 64 in total.
-	scaled := resize.Resize(32, 32, img, resize.Bicubic)
+func dHash(img image.Image) (bits [2]uint64) {
+	// Resize the image to 9x8.
+	scaled := resize.Resize(8, 8, img, resize.Bicubic)
 
-	// Read out diagonal.
-	pixels := new([3][32]int)
-	averages := new([3]int)
-	var (
-		y, cb, cr      int
-		prevCb, prevCr int
-	)
-	for pos := 0; pos < 32; pos++ {
-		colour := scaled.At(pos, pos)
-		switch spec := colour.(type) {
-		case color.YCbCr:
-			y = int(spec.Y)
-			cb = int(spec.Cb)
-			cr = int(spec.Cr)
-		default:
-			r, g, b, _ := colour.RGBA()
-			y8, cb8, cr8 := color.RGBToYCbCr(uint8(r), uint8(g), uint8(b))
-			y = int(y8)
-			cb = int(cb8)
-			cr = int(cr8)
+	// Scan it.
+	yPos := uint(0)
+	cbPos := uint(0)
+	crPos := uint(32)
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 8; x++ {
+			yTR, cbTR, crTR := ycbcr(scaled.At(x, y))
+			if x == 0 {
+				// The first bit is a rough approximation of the colour value.
+				if yTR&0x80 > 0 {
+					bits[0] |= 1 << yPos
+					yPos++
+				}
+				if y&1 == 0 {
+					_, cbBR, crBR := ycbcr(scaled.At(x, y+1))
+					if (cbBR+cbTR)>>1&0x80 > 0 {
+						bits[1] |= 1 << cbPos
+						cbPos++
+					}
+					if (crBR+crTR)>>1&0x80 > 0 {
+						bits[1] |= 1 << crPos
+						crPos++
+					}
+				}
+			} else {
+				// Use a rough first derivative for the other bits.
+				yTL, cbTL, crTL := ycbcr(scaled.At(x-1, y))
+				if yTR > yTL {
+					bits[0] |= 1 << yPos
+					yPos++
+				}
+				if y&1 == 0 {
+					_, cbBR, crBR := ycbcr(scaled.At(x, y+1))
+					_, cbBL, crBL := ycbcr(scaled.At(x-1, y+1))
+					if (cbBR+cbTR)>>1 > (cbBL+cbTL)>>1 {
+						bits[1] |= 1 << cbPos
+						cbPos++
+					}
+					if (crBR+crTR)>>1 > (crBL+crTL)>>1 {
+						bits[1] |= 1 << crPos
+						crPos++
+					}
+				}
+			}
 		}
-		pixels[0][pos] = y
-		averages[0] += y
-		if pos&1 == 0 {
-			prevCb = cb
-			prevCr = cr
+	}
+
+	return
+}
+
+// histogram calculates a histogram based on the YCbCr values of img and returns
+// a rough approximation of it in 64 bits. For each colour channel, a bit is
+// set if a histogram value is greater than the median. The Y channel gets 32
+// bits, the Cb and Cr values each get 16 bits.
+func histogram(img image.Image) (bits uint64, histoMax [3]float32) {
+	h := new([64]int)
+
+	// Create histogram.
+	bounds := img.Bounds()
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			y, cb, cr := ycbcr(img.At(x, y))
+			h[y>>3]++
+			h[32+cb>>4]++
+			h[48+cr>>4]++
+		}
+	}
+
+	// Calculate medians and maximums.
+	median := func(v []int) (int, float32) {
+		sorted := make([]int, len(v))
+		copy(sorted, v)
+		sort.Ints(sorted)
+		return sorted[len(v)/2], float32(sorted[len(v)-1]) /
+			float32((bounds.Max.X-bounds.Min.X)*(bounds.Max.Y-bounds.Min.Y))
+	}
+	my, yMax := median(h[:32])
+	mcb, cbMax := median(h[32:48])
+	mcr, crMax := median(h[48:])
+	histoMax[0] = yMax
+	histoMax[1] = cbMax
+	histoMax[2] = crMax
+
+	// Quantize histogram.
+	for index, value := range h {
+		if index < 32 {
+			if value > my {
+				bits |= 1 << uint(index)
+			}
+		} else if index < 48 {
+			if value > mcb {
+				bits |= 1 << uint(index-32)
+			}
 		} else {
-			cb = (prevCb + cb) >> 1
-			cr = (prevCr + cr) >> 1
-			pixels[1][pos>>1] = cb
-			pixels[2][pos>>1] = cr
-			averages[1] += cb
-			averages[2] += cr
-		}
-	}
-
-	// Create bit vector.
-	for bit := uint(0); bit < 32; bit++ { // Y first.
-		if pixels[0][bit] >= averages[0]>>5 { // ">> 5" is like "/ 32".
-			bits |= 1 << bit
-		}
-	}
-	for bit := uint(0); bit < 16; bit++ { // Cb, Cr next.
-		if pixels[1][bit] >= averages[1]>>4 { // ">> 4" is like "/ 16".
-			bits |= 1 << (bit + 32)
-		}
-		if pixels[2][bit] >= averages[2]>>4 {
-			bits |= 1 << (bit + 48)
+			if value > mcr {
+				bits |= 1 << uint(index-32)
+			}
 		}
 	}
 

@@ -91,10 +91,12 @@ func (store *Store) Add(id interface{}, hash Hash) {
 	// Make this image a candidate.
 	index := len(store.candidates)
 	store.candidates = append(store.candidates, candidate{
-		id:           id,
-		scaleCoef:    hash.Coefs[0],
-		ratio:        hash.Ratio,
-		crossSection: hash.CrossSection})
+		id,
+		hash.Coefs[0],
+		hash.Ratio,
+		hash.DHash,
+		hash.Histogram,
+		hash.HistoMax})
 
 	// Distribute candidate index into the buckets.
 	for coefIndex, coef := range hash.Coefs {
@@ -173,15 +175,33 @@ func (store *Store) Query(hash Hash) []*Match {
 					// Difference in image ratios.
 					ratioDiff := math.Abs(store.candidates[index].ratio - hash.Ratio)
 
-					// The hamming distance between the cross-section bit vectors.
-					hamming := hammingDistance(store.candidates[index].crossSection, hash.CrossSection)
+					// The hamming distance between the dHash bit vectors.
+					hamming1 := hammingDistance(store.candidates[index].dHash[0], hash.DHash[0])
+					hamming1 += hammingDistance(store.candidates[index].dHash[1], hash.DHash[1])
+
+					// The hamming distance between the histogram bit vectors.
+					hamming2 := hammingDistance(store.candidates[index].histogram, hash.Histogram)
+
+					// The maximum of the absolute differences between the two histogram maxima.
+					var histMaxDiff float32
+					for i := 0; i < 3; i++ {
+						diff := store.candidates[index].histoMax[i] - hash.HistoMax[i]
+						if diff < 0 {
+							diff = -diff
+						}
+						if diff > histMaxDiff {
+							histMaxDiff = diff
+						}
+					}
 
 					// Add this match.
 					matchMap[index] = &Match{
 						store.candidates[index].id,
 						score,
 						ratioDiff,
-						hamming}
+						hamming1,
+						hamming2,
+						histMaxDiff}
 				}
 
 				// At this point, we have an entry in matches. Simply subtract the
