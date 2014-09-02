@@ -34,7 +34,7 @@ func equalMatrices(matrix1, matrix2 Matrix) bool {
 		return false
 	}
 	for index := range matrix1.Coefs {
-		if !equal(matrix1.Coefs[index], matrix2.Coefs[index]) {
+		if math.Abs(matrix1.Coefs[index][0]-matrix2.Coefs[index][0]) > epsilon {
 			return false
 		}
 	}
@@ -79,19 +79,19 @@ func TestCoef(t *testing.T) {
 func TestColorConversion(t *testing.T) {
 	alpha := color.Alpha{255}
 	alphaCoef := colorToCoef(alpha)
-	if !equal(alphaCoef, Coef{255}) {
+	if !equal(alphaCoef, Coef{0, 0, 0}) {
 		t.Errorf("Conversion failed (%v to %v)", alpha, alphaCoef)
 	}
 
 	gray := color.Gray{64}
 	grayCoef := colorToCoef(gray)
-	if !equal(grayCoef, Coef{64}) {
+	if !equal(grayCoef, Coef{64, 128, 128}) {
 		t.Errorf("Conversion failed (%v to %v)", gray, grayCoef)
 	}
 
 	gray16 := color.Gray16{65535}
 	gray16Coef := colorToCoef(gray16)
-	if !equal(gray16Coef, Coef{65535}) {
+	if !equal(gray16Coef, Coef{255, 128, 128}) {
 		t.Errorf("Conversion failed (%v to %v)", gray16, gray16Coef)
 	}
 
@@ -101,9 +101,9 @@ func TestColorConversion(t *testing.T) {
 		t.Errorf("Conversion failed (%v to %v)", yCbCr, yCbCrCoef)
 	}
 
-	rgba := color.RGBA{1, 128, 255, 73}
+	rgba := color.RGBA{0, 0, 0, 0}
 	rgbaCoef := colorToCoef(rgba)
-	if !equal(rgbaCoef, Coef{1, 128, 255, 73}) {
+	if !equal(rgbaCoef, Coef{0, 128, 128}) {
 		t.Errorf("Conversion failed (%v to %v)", rgba, rgbaCoef)
 	}
 }

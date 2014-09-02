@@ -53,7 +53,7 @@ type Store struct {
 	indices [][][][]int
 
 	// Whether this store was modified since it was loaded/created.
-	Modified bool
+	modified bool
 }
 
 // NewStore returns a new, empty image store.
@@ -123,7 +123,7 @@ func (store *Store) Add(id interface{}, hash Hash) {
 	}
 
 	// Image was successfully added.
-	store.Modified = true
+	store.modified = true
 }
 
 // Query performs a similarity search on the given image hash and returns
@@ -206,10 +206,12 @@ func (store *Store) Query(hash Hash) []*Match {
 
 				// At this point, we have an entry in matches. Simply subtract the
 				// corresponding weight.
+				y := coefIndex / int(hash.Width)
+				x := coefIndex % int(hash.Height)
 				for colour := range coef {
-					bin := hash.Height
-					if hash.Width > hash.Height {
-						bin = hash.Width
+					bin := y
+					if x > y {
+						bin = x
 					}
 					if bin > 5 {
 						bin = 5
@@ -236,6 +238,15 @@ func (store *Store) Size() int {
 	defer store.RUnlock()
 
 	return len(store.candidates)
+}
+
+// Modified indicates whether this store has been modified since it was loaded
+// or created.
+func (store *Store) Modified() bool {
+	store.RLock()
+	defer store.RUnlock()
+
+	return store.modified
 }
 
 // GobDecode reconstructs the store from a binary representation.

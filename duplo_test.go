@@ -208,9 +208,9 @@ func TestQuery(t *testing.T) {
 	}
 
 	// Query the store.
-	matches := store.Query(CreateHash(query), true, 1)
-	if len(matches) != 1 {
-		t.Errorf("Invalid query result set size, expected 1, is %d", len(matches))
+	matches := store.Query(CreateHash(query))
+	if len(matches) == 0 {
+		t.Errorf("Invalid query result set size, expected 0, is %d", len(matches))
 		return
 	}
 	if matches[0].ID != "imgA" {
