@@ -30,7 +30,7 @@ but you may need to adjust them based on your specific imagery.
 
   // Any matching score higher than this value will disqualify an image as a
   // duplicate.
-  scoreThreshold = 1200.0
+  scoreThreshold = 3500.0
 
 */
 package duplo
