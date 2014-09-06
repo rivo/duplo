@@ -56,8 +56,8 @@ type Store struct {
 	modified bool
 }
 
-// NewStore returns a new, empty image store.
-func NewStore() *Store {
+// New returns a new, empty image store.
+func New() *Store {
 	store := new(Store)
 
 	store.indices = make([][][][]int, 2)

@@ -119,7 +119,7 @@ func TestQuickSelect(t *testing.T) {
 
 // Test adding a black image to a store.
 func TestAddBasic(t *testing.T) {
-	store := NewStore()
+	store := New()
 	//image := image.NewYCbCr(image.Rect(0, 0, 100, 100), image.YCbCrSubsampleRatio444)
 	//image := image.NewGray(image.Rect(0, 0, 100, 100))
 	frame := image.Rect(0, 0, 100, 100)
@@ -190,7 +190,7 @@ func TestQuery(t *testing.T) {
 	addB, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgB)))
 	query, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgC)))
 
-	store := NewStore()
+	store := New()
 	store.Add("imgA", CreateHash(addA))
 	store.Add("imgB", CreateHash(addB))
 
@@ -230,7 +230,7 @@ func TestGob(t *testing.T) {
 	addB, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgB)))
 	addC, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgC)))
 
-	store := NewStore()
+	store := New()
 	store.Add(testID{"image", 1}, CreateHash(addA))
 	store.Add(testID{"image", 2}, CreateHash(addB))
 	store.Add(testID{"image", 3}, CreateHash(addC))
