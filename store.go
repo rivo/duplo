@@ -40,6 +40,9 @@ type Store struct {
 	// All images in the store or, rather, the candidates for a query.
 	candidates []candidate
 
+	// All IDs in the store, mapping to candidate indices.
+	ids map[interface{}]int
+
 	// The number of elements (colour channels) in a coefficient.
 	coefSize int
 
@@ -60,6 +63,7 @@ type Store struct {
 func New() *Store {
 	store := new(Store)
 
+	store.ids = make(map[interface{}]int)
 	store.indices = make([][][][]int, 2)
 	for index := range store.indices {
 		store.indices[index] = make([][][]int, ImageScale*ImageScale)
@@ -69,10 +73,18 @@ func New() *Store {
 }
 
 // Add adds an image (via its hash) to the store. The provided ID is the value
-// that will be returned as the result of a similarity query.
+// that will be returned as the result of a similarity query. If an ID is
+// already in the store, it is not added again.
 func (store *Store) Add(id interface{}, hash Hash) {
 	store.Lock()
 	defer store.Unlock()
+
+	// Do we already manage this image?
+	_, ok := store.ids[id]
+	if ok {
+		// Yes, we do. Don't add it again.
+		return
+	}
 
 	// We need this for when we serialize the store.
 	gob.Register(id)
@@ -97,6 +109,7 @@ func (store *Store) Add(id interface{}, hash Hash) {
 		hash.DHash,
 		hash.Histogram,
 		hash.HistoMax})
+	store.ids[id] = index
 
 	// Distribute candidate index into the buckets.
 	for coefIndex, coef := range hash.Coefs {
