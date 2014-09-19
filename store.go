@@ -152,7 +152,7 @@ func (store *Store) Query(hash Hash) []*Match {
 
 	// matchMap contains all candidates which were found in index buckets
 	// during the search.
-	matchMap := make(map[int]*Match, TopCoefs)
+	matchMap := make(map[int]*Match)
 
 	// Examine hash buckets.
 	for coefIndex, coef := range hash.Coefs {
@@ -262,7 +262,11 @@ func (store *Store) Modified() bool {
 	return store.modified
 }
 
-// GobDecode reconstructs the store from a binary representation.
+// GobDecode reconstructs the store from a binary representation. You may need
+// to register any types that you put into the store in order for them to be
+// decoded successfully. Example:
+//
+//     gob.Register(YourType{})
 func (store *Store) GobDecode(from []byte) error {
 	store.Lock()
 	defer store.Unlock()
