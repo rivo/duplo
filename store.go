@@ -299,6 +299,25 @@ func (store *Store) GobDecode(from []byte) error {
 		if err := decoder.Decode(&store.candidates[index].ratio); err != nil {
 			return fmt.Errorf("Unable to decode candidate ratio: %s", err)
 		}
+		if err := decoder.Decode(&store.candidates[index].dHash); err != nil {
+			return fmt.Errorf("Unable to decode dHash: %s", err)
+		}
+		if err := decoder.Decode(&store.candidates[index].histogram); err != nil {
+			return fmt.Errorf("Unable to decode histogram vector: %s", err)
+		}
+		if err := decoder.Decode(&store.candidates[index].histoMax); err != nil {
+			return fmt.Errorf("Unable to decode histogram maximum: %s", err)
+		}
+	}
+
+	// The ID set.
+	if err := decoder.Decode(&store.ids); err != nil {
+		return fmt.Errorf("Unable to decode ID set: %s", err)
+	}
+
+	// The coefficient size.
+	if err := decoder.Decode(&store.coefSize); err != nil {
+		return fmt.Errorf("Unable to decode coefficient size: %s", err)
 	}
 
 	// Indices.
@@ -346,6 +365,25 @@ func (store *Store) GobEncode() ([]byte, error) {
 		if err := encoder.Encode(candidate.ratio); err != nil {
 			return nil, fmt.Errorf("Unable to encode candidate ratio: %s", err)
 		}
+		if err := encoder.Encode(candidate.dHash); err != nil {
+			return nil, fmt.Errorf("Unable to encode dHash: %s", err)
+		}
+		if err := encoder.Encode(candidate.histogram); err != nil {
+			return nil, fmt.Errorf("Unable to encode histogram bit vector: %s", err)
+		}
+		if err := encoder.Encode(candidate.histoMax); err != nil {
+			return nil, fmt.Errorf("Unable to encode histogram maximum: %s", err)
+		}
+	}
+
+	// The ID set.
+	if err := encoder.Encode(store.ids); err != nil {
+		return nil, fmt.Errorf("Unable to encode ID set: %s", err)
+	}
+
+	// The coefficient size.
+	if err := encoder.Encode(store.coefSize); err != nil {
+		return nil, fmt.Errorf("Unable to encode coefficient size: %s", err)
 	}
 
 	// Indices.
