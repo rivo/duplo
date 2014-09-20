@@ -150,9 +150,9 @@ func (store *Store) Query(hash Hash) []*Match {
 		return nil
 	}
 
-	// matchMap contains all candidates which were found in index buckets
-	// during the search.
-	matchMap := make(map[int]*Match)
+	// We're often touching all candidates at some point.
+	matches := make(matchList, len(store.candidates))
+	var numMatches int
 
 	// Examine hash buckets.
 	for coefIndex, coef := range hash.Coefs {
@@ -177,7 +177,7 @@ func (store *Store) Query(hash Hash) []*Match {
 
 			for _, index := range store.indices[sign][coefIndex][colourIndex] {
 				// Do we know this index already?
-				if _, ok := matchMap[index]; !ok {
+				if matches[index] == nil {
 					// No. Calculate initial score.
 					score := 0.0
 					for colour := range coef {
@@ -208,13 +208,14 @@ func (store *Store) Query(hash Hash) []*Match {
 					}
 
 					// Add this match.
-					matchMap[index] = &Match{
+					matches[index] = &Match{
 						store.candidates[index].id,
 						score,
 						ratioDiff,
 						hamming1,
 						hamming2,
 						histMaxDiff}
+					numMatches++
 				}
 
 				// At this point, we have an entry in matches. Simply subtract the
@@ -229,20 +230,16 @@ func (store *Store) Query(hash Hash) []*Match {
 					if bin > 5 {
 						bin = 5
 					}
-					matchMap[index].Score -= weights[colour][bin]
+					matches[index].Score -= weights[colour][bin]
 				}
 			}
 		}
 	}
 
-	// Make a sorted list of matches.
-	result := make(matches, 0, len(matchMap))
-	for _, match := range matchMap {
-		result = append(result, match)
-	}
-	sort.Sort(matches(result))
+	// Sort matches and return.
+	sort.Sort(matches)
 
-	return result
+	return matches[0:numMatches]
 }
 
 // Size returns the number of images currently in the store.
