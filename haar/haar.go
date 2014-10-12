@@ -1,5 +1,5 @@
 /*
-Package haar provides a Haar wavelet function operating on YCbCr images.
+Package haar provides a Haar wavelet function for bitmap images.
 */
 package haar
 
@@ -55,27 +55,18 @@ type Matrix struct {
 	Height uint
 }
 
-// colorToCoef converts a native Color type into a YCbCr Coef. We are using
-// YCbCr because we only have weights for them. (Apart from the score weights,
+// colorToCoef converts a native Color type into a YIQ Coef. We are using
+// YIQ because we only have weights for them. (Apart from the score weights,
 // the store is built to handle different sized Coef's so any length may be
 // returned.)
 func colorToCoef(gen color.Color) Coef {
-	var r, g, b uint8
-	switch spec := gen.(type) {
-	case color.Alpha:
-		return Coef{0, 0, 0}
-	case color.YCbCr:
-		return Coef{float64(spec.Y), float64(spec.Cb), float64(spec.Cr)}
-	case color.RGBA:
-		r, g, b = spec.R, spec.G, spec.B
-	default: // The rest is RGBA.
-		r32, g32, b32, _ := gen.RGBA()
-		r = uint8(r32 & 0xffff >> 8)
-		g = uint8(g32 & 0xffff >> 8)
-		b = uint8(b32 & 0xffff >> 8)
-	}
-	y, cb, cr := color.RGBToYCbCr(r, g, b)
-	return Coef{float64(y), float64(cb), float64(cr)}
+	// Convert into YIQ. (We may want to convert from YCbCr directly one day.)
+	r32, g32, b32, _ := gen.RGBA()
+	r, g, b := float64(r32), float64(g32), float64(b32)
+	return Coef{
+		(0.299900*r + 0.587000*g + 0.114000*b) / 0x10000,
+		(0.595716*r - 0.274453*g - 0.321263*b) / 0x10000,
+		(0.211456*r - 0.522591*g + 0.311135*b) / 0x10000}
 }
 
 // Transform performs a foward 2D Haar transform on the provided image. The

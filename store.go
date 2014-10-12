@@ -20,8 +20,7 @@ var (
 	// be discarded. Change this only once when the package is initialized.
 	TopCoefs = 40
 
-	// The weights for the scoring function (currently for the YIQ colour space
-	// but we'll use it for YCbCr, too).
+	// The weights for the scoring function (currently for the YIQ colour space).
 	weights = [3][6]float64{
 		[6]float64{5.00, 0.83, 1.01, 0.52, 0.47, 0.30},
 		[6]float64{19.21, 1.26, 0.44, 0.53, 0.28, 0.14},

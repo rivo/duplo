@@ -38,8 +38,10 @@ type Hash struct {
 	HistoMax [3]float32
 }
 
-// CreateHash calculates and returns the visual hash of the provided image.
-func CreateHash(img image.Image) Hash {
+// CreateHash calculates and returns the visual hash of the provided image as
+// well as a resized version of it (ImageScale x ImageScale) which may be
+// ignored if not needed anymore.
+func CreateHash(img image.Image) (Hash, image.Image) {
 	// Determine image ratio.
 	bounds := img.Bounds()
 	width := bounds.Max.X - bounds.Min.X
@@ -64,7 +66,7 @@ func CreateHash(img image.Image) Hash {
 	// Create histogram bit vector.
 	h, hm := histogram(img)
 
-	return Hash{haar.Matrix{matrix.Coefs, ImageScale, ImageScale}, thresholds, ratio, d, h, hm}
+	return Hash{haar.Matrix{matrix.Coefs, ImageScale, ImageScale}, thresholds, ratio, d, h, hm}, scaled
 }
 
 // coefThreshold returns, for the given coefficients, the kth largest absolute

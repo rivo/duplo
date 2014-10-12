@@ -126,7 +126,7 @@ func TestAddBasic(t *testing.T) {
 	plate := image.NewUniform(color.RGBA{1, 2, 3, 4})
 	img := image.NewRGBA(frame)
 	draw.Draw(img, frame, plate, image.Point{0, 0}, draw.Over)
-	hash := CreateHash(img)
+	hash, _ := CreateHash(img)
 	id := struct{ group, file string }{"A", "12345"}
 	store.Add(id, hash)
 
@@ -191,8 +191,10 @@ func TestQuery(t *testing.T) {
 	query, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgC)))
 
 	store := New()
-	store.Add("imgA", CreateHash(addA))
-	store.Add("imgB", CreateHash(addB))
+	hashA, _ := CreateHash(addA)
+	hashB, _ := CreateHash(addB)
+	store.Add("imgA", hashA)
+	store.Add("imgB", hashB)
 
 	// Some plausibility checks.
 	coefCount := 0
@@ -208,7 +210,8 @@ func TestQuery(t *testing.T) {
 	}
 
 	// Query the store.
-	matches := store.Query(CreateHash(query))
+	queryHash, _ := CreateHash(query)
+	matches := store.Query(queryHash)
 	if len(matches) == 0 {
 		t.Errorf("Invalid query result set size, expected 0, is %d", len(matches))
 		return
@@ -231,9 +234,12 @@ func TestGob(t *testing.T) {
 	addC, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgC)))
 
 	store := New()
-	store.Add(testID{"image", 1}, CreateHash(addA))
-	store.Add(testID{"image", 2}, CreateHash(addB))
-	store.Add(testID{"image", 3}, CreateHash(addC))
+	hashA, _ := CreateHash(addA)
+	hashB, _ := CreateHash(addB)
+	hashC, _ := CreateHash(addC)
+	store.Add(testID{"image", 1}, hashA)
+	store.Add(testID{"image", 2}, hashB)
+	store.Add(testID{"image", 3}, hashC)
 
 	// Serialize store.
 	var file bytes.Buffer
