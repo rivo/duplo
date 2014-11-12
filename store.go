@@ -194,26 +194,13 @@ func (store *Store) Query(hash Hash) []*Match {
 					// The hamming distance between the histogram bit vectors.
 					hamming2 := hammingDistance(store.candidates[index].histogram, hash.Histogram)
 
-					// The maximum of the absolute differences between the two histogram maxima.
-					var histMaxDiff float32
-					for i := 0; i < 3; i++ {
-						diff := store.candidates[index].histoMax[i] - hash.HistoMax[i]
-						if diff < 0 {
-							diff = -diff
-						}
-						if diff > histMaxDiff {
-							histMaxDiff = diff
-						}
-					}
-
 					// Add this match.
 					matches[index] = &Match{
 						store.candidates[index].id,
 						score,
 						ratioDiff,
 						hamming1,
-						hamming2,
-						histMaxDiff}
+						hamming2}
 					numMatches++
 				}
 

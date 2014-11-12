@@ -17,9 +17,6 @@ type Match struct {
 
 	// The hamming distance between the two histogram bit vectors.
 	HistogramDistance int
-
-	// The absolute difference between the two histogram maxima.
-	HistoMaxDiff float32
 }
 
 type matchList []*Match
