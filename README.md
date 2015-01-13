@@ -28,9 +28,9 @@ matches := store.Query(hash)
 // matches[0] is the best match.
 ```
 
-## Applications
+## Possible Applications
 
-* Recognize copyright violations
+* Identify copyright violations
 * Save space by detecting and removing duplicate images
 * Search for images by similarity
 

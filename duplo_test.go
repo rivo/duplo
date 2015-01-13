@@ -117,13 +117,13 @@ func TestQuickSelect(t *testing.T) {
 	}
 }
 
-// Test adding a black image to a store.
+// Test adding an almost black image to a store.
 func TestAddBasic(t *testing.T) {
 	store := New()
 	//image := image.NewYCbCr(image.Rect(0, 0, 100, 100), image.YCbCrSubsampleRatio444)
 	//image := image.NewGray(image.Rect(0, 0, 100, 100))
 	frame := image.Rect(0, 0, 100, 100)
-	plate := image.NewUniform(color.RGBA{1, 2, 3, 4})
+	plate := image.NewUniform(color.RGBA{3, 0, 4, 255})
 	img := image.NewRGBA(frame)
 	draw.Draw(img, frame, plate, image.Point{0, 0}, draw.Over)
 	hash, _ := CreateHash(img)
@@ -140,7 +140,8 @@ func TestAddBasic(t *testing.T) {
 	if candidate.id != id {
 		t.Errorf("Wrong candidate ID, expected %v, is %v", id, candidate.id)
 	}
-	expected := haar.Coef{64, 4128, 4064}
+	expected := haar.Coef{0.1694625, 0.062762, 0.2348635}
+	t.Logf("%v", candidate)
 	if size := len(candidate.scaleCoef); size != 3 {
 		t.Errorf("Wrong scaling function coefficient size, expected 3, is %d", size)
 		return

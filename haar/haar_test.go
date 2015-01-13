@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const epsilon = 0.0000001
+const epsilon = 0.002
 
 // Whether or not the two slices are equal to an epsilon difference.
 func equal(slice1, slice2 []float64) bool {
@@ -75,50 +75,28 @@ func TestCoef(t *testing.T) {
 	}
 }
 
-// Test the proper conversion of a colour.
+// Test the proper RGB-YIQ conversion.
 func TestColorConversion(t *testing.T) {
-	alpha := color.Alpha{255}
-	alphaCoef := colorToCoef(alpha)
-	if !equal(alphaCoef, Coef{0, 0, 0}) {
-		t.Errorf("Conversion failed (%v to %v)", alpha, alphaCoef)
-	}
-
-	gray := color.Gray{64}
-	grayCoef := colorToCoef(gray)
-	if !equal(grayCoef, Coef{64, 128, 128}) {
-		t.Errorf("Conversion failed (%v to %v)", gray, grayCoef)
-	}
-
-	gray16 := color.Gray16{65535}
-	gray16Coef := colorToCoef(gray16)
-	if !equal(gray16Coef, Coef{255, 128, 128}) {
-		t.Errorf("Conversion failed (%v to %v)", gray16, gray16Coef)
-	}
-
-	yCbCr := color.YCbCr{90, 60, 90}
-	yCbCrCoef := colorToCoef(yCbCr)
-	if !equal(yCbCrCoef, Coef{90, 60, 90}) {
-		t.Errorf("Conversion failed (%v to %v)", yCbCr, yCbCrCoef)
-	}
-
-	rgba := color.RGBA{0, 0, 0, 0}
-	rgbaCoef := colorToCoef(rgba)
-	if !equal(rgbaCoef, Coef{0, 128, 128}) {
-		t.Errorf("Conversion failed (%v to %v)", rgba, rgbaCoef)
+	rgb := color.RGBA{64, 0, 128, 255}
+	coef := colorToCoef(rgb)
+	if !equal(coef, Coef{0.131975, -0.0117025, 0.2084315}) {
+		t.Errorf("Conversion failed (%v to %v)", rgb, coef)
 	}
 }
 
 // Essentially a 1D Haar Wavelet test.
 func TestSingleRow(t *testing.T) {
-	input := &image.Gray{
-		Pix:    []uint8{4, 2, 5, 5},
-		Stride: 4,
+	// This is a rough approximation to a 4px by 1px YIQ image with pixels
+	// .04, .02, .05, .05. Y, I, and Q all have the same value.
+	input := &image.RGBA{
+		Pix:    []uint8{26, 1, 16, 1, 13, 0, 8, 1, 33, 1, 20, 1, 33, 1, 20, 1},
+		Stride: 16,
 		Rect:   image.Rect(0, 0, 4, 1)}
 
 	output := Transform(input)
 
 	expected := Matrix{
-		Coefs:  []Coef{Coef{8.0}, Coef{-2}, Coef{2 / math.Sqrt2}, Coef{0}},
+		Coefs:  []Coef{Coef{0.08}, Coef{-0.02}, Coef{.02 / math.Sqrt2}, Coef{0}},
 		Width:  4,
 		Height: 1}
 
@@ -129,15 +107,17 @@ func TestSingleRow(t *testing.T) {
 
 // Essentially another 1D Haar Wavelet test.
 func TestSingleColumn(t *testing.T) {
-	input := &image.Gray{
-		Pix:    []uint8{4, 2, 5, 5},
-		Stride: 1,
+	// This is a rough approximation to a 1px by 4px YIQ image with pixels
+	// .04, .02, .05, .05. Y, I, and Q all have the same value.
+	input := &image.RGBA{
+		Pix:    []uint8{26, 1, 16, 1, 13, 0, 8, 1, 33, 1, 20, 1, 33, 1, 20, 1},
+		Stride: 4,
 		Rect:   image.Rect(0, 0, 1, 4)}
 
 	output := Transform(input)
 
 	expected := Matrix{
-		Coefs:  floatsToCoefs([]float64{8, -2, 2 / math.Sqrt2, 0}),
+		Coefs:  floatsToCoefs([]float64{0.08, -0.02, 0.02 / math.Sqrt2, 0}),
 		Width:  1,
 		Height: 4}
 
@@ -148,23 +128,26 @@ func TestSingleColumn(t *testing.T) {
 
 // Basic 2D Haar Wavelet test.
 func TestMatrix4x4(t *testing.T) {
-	input := &image.Gray{
+	// This is a rough approximation to a 4px by 4px YIQ image with consecutive
+	// pixels increasing by one each (.01, .02, .03, .04, ..., .16) and Y, I, and
+	// Q having the same values.
+	input := &image.RGBA{
 		Pix: []uint8{
-			1, 2, 3, 4,
-			5, 6, 7, 8,
-			9, 10, 11, 12,
-			13, 14, 15, 16},
-		Stride: 4,
+			7, 0, 4, 1, 13, 0, 8, 1, 20, 1, 12, 1, 26, 1, 16, 1,
+			33, 1, 20, 1, 39, 1, 24, 1, 46, 1, 29, 1, 53, 2, 33, 1,
+			59, 2, 37, 1, 66, 2, 41, 1, 72, 2, 45, 1, 79, 2, 49, 1,
+			85, 3, 53, 1, 92, 3, 57, 1, 99, 3, 61, 1, 105, 3, 65, 1},
+		Stride: 16,
 		Rect:   image.Rect(0, 0, 4, 4)}
 
 	output := Transform(input)
 
 	expected := Matrix{
 		Coefs: floatsToCoefs([]float64{
-			34, -4, -math.Sqrt2, -math.Sqrt2,
-			-16, 0, 0, 0,
-			-4 * math.Sqrt2, 0, 0, 0,
-			-4 * math.Sqrt2, 0, 0, 0}),
+			.34, -.04, -math.Sqrt2 / 100, -math.Sqrt2 / 100,
+			-.16, 0, 0, 0,
+			-.04 * math.Sqrt2, 0, 0, 0,
+			-.04 * math.Sqrt2, 0, 0, 0}),
 		Width:  4,
 		Height: 4}
 

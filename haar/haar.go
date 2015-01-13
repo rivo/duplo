@@ -62,11 +62,11 @@ type Matrix struct {
 func colorToCoef(gen color.Color) Coef {
 	// Convert into YIQ. (We may want to convert from YCbCr directly one day.)
 	r32, g32, b32, _ := gen.RGBA()
-	r, g, b := float64(r32), float64(g32), float64(b32)
+	r, g, b := float64(r32>>8), float64(g32>>8), float64(b32>>8)
 	return Coef{
-		(0.299900*r + 0.587000*g + 0.114000*b) / 0x10000,
-		(0.595716*r - 0.274453*g - 0.321263*b) / 0x10000,
-		(0.211456*r - 0.522591*g + 0.311135*b) / 0x10000}
+		(0.299900*r + 0.587000*g + 0.114000*b) / 0x100,
+		(0.595716*r - 0.274453*g - 0.321263*b) / 0x100,
+		(0.211456*r - 0.522591*g + 0.311135*b) / 0x100}
 }
 
 // Transform performs a foward 2D Haar transform on the provided image. The
