@@ -13,7 +13,7 @@ import (
 var (
 	// ImageScale is the width and height to which images are resized before they
 	// are being processed. Change this only once when the package is initialized.
-	ImageScale uint = 50
+	ImageScale uint = 128
 
 	// TopCoefs is the number of top coefficients (per colour channel), ordered
 	// by absolute value, that will be kept. Coefficients that rank lower will

@@ -31,7 +31,7 @@ matches := store.Query(hash)
 ## Possible Applications
 
 * Identify copyright violations
-* Save space by detecting and removing duplicate images
+* Save disk space by detecting and removing duplicate images
 * Search for images by similarity
 
 ## More Information
