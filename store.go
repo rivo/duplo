@@ -185,7 +185,7 @@ func (store *Store) Query(hash Hash) []*Match {
 					}
 
 					// Difference in image ratios.
-					ratioDiff := math.Abs(store.candidates[index].ratio - hash.Ratio)
+					ratioDiff := math.Abs(math.Log(store.candidates[index].ratio) - math.Log(hash.Ratio))
 
 					// The hamming distance between the dHash bit vectors.
 					hamming1 := hammingDistance(store.candidates[index].dHash[0], hash.DHash[0])

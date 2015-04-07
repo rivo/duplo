@@ -9,7 +9,7 @@ type Match struct {
 	// the match.
 	Score float64
 
-	// The absolute difference between the two image ratios.
+	// The absolute difference between the two image ratios' log values.
 	RatioDiff float64
 
 	// The hamming distance between the two dHash bit vectors.
