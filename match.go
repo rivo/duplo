@@ -19,8 +19,9 @@ type Match struct {
 	HistogramDistance int
 }
 
-type matchList []*Match
+// Matches is a slice of match results.
+type Matches []*Match
 
-func (m matchList) Len() int           { return len(m) }
-func (m matchList) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
-func (m matchList) Less(i, j int) bool { return m[j] == nil || (m[i] != nil && m[i].Score < m[j].Score) }
+func (m Matches) Len() int           { return len(m) }
+func (m Matches) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
+func (m Matches) Less(i, j int) bool { return m[j] == nil || (m[i] != nil && m[i].Score < m[j].Score) }

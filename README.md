@@ -25,6 +25,7 @@ store.Add("myimage", hash)
 // Query the store based on image "query".
 hash, _ = duplo.CreateHash(query)
 matches := store.Query(hash)
+sort.Sort(matches)
 // matches[0] is the best match.
 ```
 

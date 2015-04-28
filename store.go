@@ -6,7 +6,6 @@ import (
 	"encoding/gob"
 	"fmt"
 	"math"
-	"sort"
 	"sync"
 )
 
@@ -139,8 +138,10 @@ func (store *Store) Add(id interface{}, hash Hash) {
 }
 
 // Query performs a similarity search on the given image hash and returns
-// all potential matches, sorted by their score (best, i.e. lowest, first).
-func (store *Store) Query(hash Hash) []*Match {
+// all potential matches. The returned slice will not be sorted but implements
+// sort.Interface, which will sort it so the match with the best score is its
+// first element.
+func (store *Store) Query(hash Hash) Matches {
 	store.RLock()
 	defer store.RUnlock()
 
@@ -150,7 +151,7 @@ func (store *Store) Query(hash Hash) []*Match {
 	}
 
 	// We're often touching all candidates at some point.
-	matches := make(matchList, len(store.candidates))
+	matches := make(Matches, len(store.candidates))
 	var numMatches int
 
 	// Examine hash buckets.
@@ -222,10 +223,15 @@ func (store *Store) Query(hash Hash) []*Match {
 		}
 	}
 
-	// Sort matches and return.
-	sort.Sort(matches)
+	// Remove all nil values.
+	compressed := make([]*Match, 0, numMatches)
+	for _, match := range matches {
+		if match != nil {
+			compressed = append(compressed, match)
+		}
+	}
 
-	return matches[0:numMatches]
+	return compressed
 }
 
 // Size returns the number of images currently in the store.
