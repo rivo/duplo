@@ -69,8 +69,8 @@ func colorToCoef(gen color.Color) Coef {
 		(0.211456*r - 0.522591*g + 0.311135*b) / 0x100}
 }
 
-// Transform performs a foward 2D Haar transform on the provided image. The
-// resulting color space of the image remains the same as the original.
+// Transform performs a foward 2D Haar transform on the provided image after
+// converting it to YIQ space.
 func Transform(img image.Image) Matrix {
 	bounds := img.Bounds()
 	width := bounds.Max.X - bounds.Min.X

@@ -108,7 +108,8 @@ func TestQuickSelect(t *testing.T) {
 		haar.Coef{9, 4.7},
 		haar.Coef{10, 4.7},
 		haar.Coef{11, 8},
-		haar.Coef{12, -2.2}}
+		haar.Coef{12, -2.2},
+	}
 
 	thresholds := coefThresholds(coefs, 4)
 
@@ -140,8 +141,8 @@ func TestAddBasic(t *testing.T) {
 	if candidate.id != id {
 		t.Errorf("Wrong candidate ID, expected %v, is %v", id, candidate.id)
 	}
-	expected := haar.Coef{0.1694625, 0.062762, 0.2348635}
-	t.Logf("%v", candidate)
+	expected := haar.Coef{0.67785, 0.251048, 0.939454}
+	t.Logf("Candidate: %v", candidate)
 	if size := len(candidate.scaleCoef); size != 3 {
 		t.Errorf("Wrong scaling function coefficient size, expected 3, is %d", size)
 		return
