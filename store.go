@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"sync"
-	"sync/atomic"
 )
 
 var (
@@ -168,10 +167,12 @@ func (store *Store) Query(hash Hash) Matches {
 
 	// We're often touching all candidates at some point.
 	scores := make([]int64, len(store.candidates))
+	for index := range scores {
+		scores[index] = math.MaxInt64
+	}
 	var numMatches int
 
 	// Examine hash buckets.
-	var wg sync.WaitGroup
 	for coefIndex, coef := range hash.Coefs {
 		if coefIndex == 0 {
 			// Ignore scaling function coefficient for now.
@@ -203,39 +204,29 @@ func (store *Store) Query(hash Hash) Matches {
 				sign = 1
 			}
 
-			wg.Add(1)
-			go func(sign, coefIndex, colourIndex int) {
-				for _, index := range store.indices[sign][coefIndex][colourIndex] {
-					// Do we know this index already?
-					if atomic.CompareAndSwapInt64(&scores[index], 0, 1) {
-						// No. Calculate initial score.
-						var score int64
-						for colour := range coef {
-							score += weights[colour][0] *
-								int64(math.Abs(store.candidates[index].scaleCoef[colour]-hash.Coefs[0][colour]))
-						}
-						atomic.AddInt64(&scores[index], score-1)
-						// Since we check for 0 to determine if the score was uninitialized,
-						// theoretically, we could have arrived here had the score coincidentally
-						// been 0 from a calculation. This is highly unlikely, however, and
-						// given the possibility of parallelizing this task, we are willing
-						// to accept this minor inaccuracy.
+			for _, index := range store.indices[sign][coefIndex][colourIndex] {
+				// Do we know this index already?
+				if scores[index] == math.MaxInt64 {
+					// No. Calculate initial score.
+					var score int64
+					for colour := range coef {
+						score += weights[colour][0] *
+							int64(math.Abs(store.candidates[index].scaleCoef[colour]-hash.Coefs[0][colour]))
 					}
-
-					// At this point, we have an entry in matches. Simply subtract the
-					// corresponding weight.
-					atomic.AddInt64(&scores[index], -weightSums[bin])
+					scores[index] += score
 				}
-				wg.Done()
-			}(sign, coefIndex, colourIndex)
+
+				// At this point, we have an entry in matches. Simply subtract the
+				// corresponding weight.
+				scores[index] -= weightSums[bin]
+			}
 		}
 	}
-	wg.Wait()
 
 	// Create matches.
 	matches := make([]*Match, 0, numMatches)
 	for index, score := range scores {
-		if score != 0 {
+		if score != math.MaxInt64 {
 			matches = append(matches, &Match{
 				ID:        store.candidates[index].id,
 				Score:     float64(score >> 32),
