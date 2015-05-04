@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"sync/atomic"
 )
 
 var (
@@ -20,10 +21,25 @@ var (
 	TopCoefs = 40
 
 	// The weights for the scoring function (currently for the YIQ colour space).
-	weights = [3][6]float64{
-		[6]float64{5.00, 0.83, 1.01, 0.52, 0.47, 0.30},
-		[6]float64{19.21, 1.26, 0.44, 0.53, 0.28, 0.14},
-		[6]float64{34.37, 0.36, 0.45, 0.14, 0.18, 0.27}}
+	// The original weights from the paper have been scaled to a fixed float
+	// 64-bit integer with the lowest 32 bits containing the decimals. The
+	// original weights are as follows:
+	//
+	//     weights = [3][6]float64{
+	//     	[6]float64{5.00, 0.83, 1.01, 0.52, 0.47, 0.30},
+	//     	[6]float64{19.21, 1.26, 0.44, 0.53, 0.28, 0.14},
+	//     	[6]float64{34.37, 0.36, 0.45, 0.14, 0.18, 0.27},
+	//     }
+	weights = [3][6]int64{
+		[6]int64{21474836480, 3564822856, 4337916969, 2233382994, 2018634629, 1288490189},
+		[6]int64{82506321756, 5411658793, 1889785610, 2276332667, 1202590843, 601295421},
+		[6]int64{147618025964, 1546188227, 1932735283, 601295421, 773094113, 1159641170},
+	}
+
+	// The weights, totalled over all colour channels. Also fixed float. Original:
+	//
+	//     weightSums = [6]float64{58.58, 2.45, 1.9, 1.19, 0.93, 0.71}
+	weightSums = [6]int64{251599184200, 10522669875, 8160437862, 5111011082, 3994319585, 3049426780}
 )
 
 // Store is a data structure that holds references to images. It holds visual
@@ -151,14 +167,26 @@ func (store *Store) Query(hash Hash) Matches {
 	}
 
 	// We're often touching all candidates at some point.
-	matches := make(Matches, len(store.candidates))
+	scores := make([]int64, len(store.candidates))
 	var numMatches int
 
 	// Examine hash buckets.
+	var wg sync.WaitGroup
 	for coefIndex, coef := range hash.Coefs {
 		if coefIndex == 0 {
 			// Ignore scaling function coefficient for now.
 			continue
+		}
+
+		// Calculate the weight bin outside the main loop.
+		y := coefIndex / int(hash.Width)
+		x := coefIndex % int(hash.Width)
+		bin := y
+		if x > y {
+			bin = x
+		}
+		if bin > 5 {
+			bin = 5
 		}
 
 		for colourIndex, colourCoef := range coef {
@@ -175,63 +203,51 @@ func (store *Store) Query(hash Hash) Matches {
 				sign = 1
 			}
 
-			for _, index := range store.indices[sign][coefIndex][colourIndex] {
-				// Do we know this index already?
-				if matches[index] == nil {
-					// No. Calculate initial score.
-					score := 0.0
-					for colour := range coef {
-						score += weights[colour][0] *
-							math.Abs(store.candidates[index].scaleCoef[colour]-hash.Coefs[0][colour])
+			wg.Add(1)
+			go func(sign, coefIndex, colourIndex int) {
+				for _, index := range store.indices[sign][coefIndex][colourIndex] {
+					// Do we know this index already?
+					if atomic.CompareAndSwapInt64(&scores[index], 0, 1) {
+						// No. Calculate initial score.
+						var score int64
+						for colour := range coef {
+							score += weights[colour][0] *
+								int64(math.Abs(store.candidates[index].scaleCoef[colour]-hash.Coefs[0][colour]))
+						}
+						atomic.AddInt64(&scores[index], score-1)
+						// Since we check for 0 to determine if the score was uninitialized,
+						// theoretically, we could have arrived here had the score coincidentally
+						// been 0 from a calculation. This is highly unlikely, however, and
+						// given the possibility of parallelizing this task, we are willing
+						// to accept this minor inaccuracy.
 					}
 
-					// Difference in image ratios.
-					ratioDiff := math.Abs(math.Log(store.candidates[index].ratio) - math.Log(hash.Ratio))
-
-					// The hamming distance between the dHash bit vectors.
-					hamming1 := hammingDistance(store.candidates[index].dHash[0], hash.DHash[0])
-					hamming1 += hammingDistance(store.candidates[index].dHash[1], hash.DHash[1])
-
-					// The hamming distance between the histogram bit vectors.
-					hamming2 := hammingDistance(store.candidates[index].histogram, hash.Histogram)
-
-					// Add this match.
-					matches[index] = &Match{
-						store.candidates[index].id,
-						score,
-						ratioDiff,
-						hamming1,
-						hamming2}
-					numMatches++
+					// At this point, we have an entry in matches. Simply subtract the
+					// corresponding weight.
+					atomic.AddInt64(&scores[index], -weightSums[bin])
 				}
+				wg.Done()
+			}(sign, coefIndex, colourIndex)
+		}
+	}
+	wg.Wait()
 
-				// At this point, we have an entry in matches. Simply subtract the
-				// corresponding weight.
-				y := coefIndex / int(hash.Width)
-				x := coefIndex % int(hash.Height)
-				for colour := range coef {
-					bin := y
-					if x > y {
-						bin = x
-					}
-					if bin > 5 {
-						bin = 5
-					}
-					matches[index].Score -= weights[colour][bin]
-				}
-			}
+	// Create matches.
+	matches := make([]*Match, 0, numMatches)
+	for index, score := range scores {
+		if score != 0 {
+			matches = append(matches, &Match{
+				ID:        store.candidates[index].id,
+				Score:     float64(score >> 32),
+				RatioDiff: math.Abs(math.Log(store.candidates[index].ratio) - math.Log(hash.Ratio)),
+				DHashDistance: hammingDistance(store.candidates[index].dHash[0], hash.DHash[0]) +
+					hammingDistance(store.candidates[index].dHash[1], hash.DHash[1]),
+				HistogramDistance: hammingDistance(store.candidates[index].histogram, hash.Histogram),
+			})
 		}
 	}
 
-	// Remove all nil values.
-	compressed := make([]*Match, 0, numMatches)
-	for _, match := range matches {
-		if match != nil {
-			compressed = append(compressed, match)
-		}
-	}
-
-	return compressed
+	return matches
 }
 
 // Size returns the number of images currently in the store.
