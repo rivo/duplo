@@ -85,6 +85,18 @@ func New() *Store {
 	return store
 }
 
+// Has checks if an image (via its ID) is already contained in the store.
+func (store *Store) Has(id interface{}) bool {
+	store.RLock()
+	defer store.RUnlock()
+
+	_, ok := store.ids[id]
+	if ok {
+		return true
+	}
+	return false
+}
+
 // Add adds an image (via its hash) to the store. The provided ID is the value
 // that will be returned as the result of a similarity query. If an ID is
 // already in the store, it is not added again.
