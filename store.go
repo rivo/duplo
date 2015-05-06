@@ -20,25 +20,14 @@ var (
 	TopCoefs = 40
 
 	// The weights for the scoring function (currently for the YIQ colour space).
-	// The original weights from the paper have been scaled to a fixed float
-	// 64-bit integer with the lowest 32 bits containing the decimals. The
-	// original weights are as follows:
-	//
-	//     weights = [3][6]float64{
-	//     	[6]float64{5.00, 0.83, 1.01, 0.52, 0.47, 0.30},
-	//     	[6]float64{19.21, 1.26, 0.44, 0.53, 0.28, 0.14},
-	//     	[6]float64{34.37, 0.36, 0.45, 0.14, 0.18, 0.27},
-	//     }
-	weights = [3][6]int64{
-		[6]int64{21474836480, 3564822856, 4337916969, 2233382994, 2018634629, 1288490189},
-		[6]int64{82506321756, 5411658793, 1889785610, 2276332667, 1202590843, 601295421},
-		[6]int64{147618025964, 1546188227, 1932735283, 601295421, 773094113, 1159641170},
+	weights = [3][6]float64{
+		[6]float64{5.00, 0.83, 1.01, 0.52, 0.47, 0.30},
+		[6]float64{19.21, 1.26, 0.44, 0.53, 0.28, 0.14},
+		[6]float64{34.37, 0.36, 0.45, 0.14, 0.18, 0.27},
 	}
 
-	// The weights, totalled over all colour channels. Also fixed float. Original:
-	//
-	//     weightSums = [6]float64{58.58, 2.45, 1.9, 1.19, 0.93, 0.71}
-	weightSums = [6]int64{251599184200, 10522669875, 8160437862, 5111011082, 3994319585, 3049426780}
+	// The weights, totalled over all colour channels.
+	weightSums = [6]float64{58.58, 2.45, 1.9, 1.19, 0.93, 0.71}
 )
 
 // Store is a data structure that holds references to images. It holds visual
@@ -178,9 +167,9 @@ func (store *Store) Query(hash Hash) Matches {
 	}
 
 	// We're often touching all candidates at some point.
-	scores := make([]int64, len(store.candidates))
+	scores := make([]float64, len(store.candidates))
 	for index := range scores {
-		scores[index] = math.MaxInt64
+		scores[index] = math.NaN()
 	}
 	var numMatches int
 
@@ -218,14 +207,14 @@ func (store *Store) Query(hash Hash) Matches {
 
 			for _, index := range store.indices[sign][coefIndex][colourIndex] {
 				// Do we know this index already?
-				if scores[index] == math.MaxInt64 {
+				if math.IsNaN(scores[index]) {
 					// No. Calculate initial score.
-					var score int64
+					score := 0.0
 					for colour := range coef {
 						score += weights[colour][0] *
-							int64(math.Abs(store.candidates[index].scaleCoef[colour]-hash.Coefs[0][colour]))
+							math.Abs(store.candidates[index].scaleCoef[colour]-hash.Coefs[0][colour])
 					}
-					scores[index] += score
+					scores[index] = score
 				}
 
 				// At this point, we have an entry in matches. Simply subtract the
@@ -238,10 +227,10 @@ func (store *Store) Query(hash Hash) Matches {
 	// Create matches.
 	matches := make([]*Match, 0, numMatches)
 	for index, score := range scores {
-		if score != math.MaxInt64 {
+		if !math.IsNaN(score) {
 			matches = append(matches, &Match{
 				ID:        store.candidates[index].id,
-				Score:     float64(score >> 32),
+				Score:     score,
 				RatioDiff: math.Abs(math.Log(store.candidates[index].ratio) - math.Log(hash.Ratio)),
 				DHashDistance: hammingDistance(store.candidates[index].dHash[0], hash.DHash[0]) +
 					hammingDistance(store.candidates[index].dHash[1], hash.DHash[1]),
