@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/gob"
+	"fmt"
 	"github.com/rivo/duplo/haar"
 	"image"
 	"image/color"
 	"image/draw"
 	"image/jpeg"
 	"math"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -214,6 +216,7 @@ func TestQuery(t *testing.T) {
 	// Query the store.
 	queryHash, _ := CreateHash(query)
 	matches := store.Query(queryHash)
+	sort.Sort(matches)
 	if len(matches) == 0 {
 		t.Errorf("Invalid query result set size, expected 0, is %d", len(matches))
 		return
@@ -318,4 +321,27 @@ func TestGob(t *testing.T) {
 			}
 		}
 	}
+}
+
+// Package example.
+func Example() {
+	// Create some example JPEG images.
+	addA, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgA)))
+	addB, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgB)))
+	query, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgC)))
+
+	// Create the store.
+	store := New()
+
+	// Turn two images into hashes and add them to the store.
+	hashA, _ := CreateHash(addA)
+	hashB, _ := CreateHash(addB)
+	store.Add("imgA", hashA)
+	store.Add("imgB", hashB)
+
+	// Query the store for our third image (which is most similar to "imgA").
+	queryHash, _ := CreateHash(query)
+	matches := store.Query(queryHash)
+	fmt.Println(matches[0].ID)
+	// Output: imgA
 }
