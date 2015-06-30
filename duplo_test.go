@@ -226,6 +226,34 @@ func TestQuery(t *testing.T) {
 	}
 }
 
+// Test the delete function.
+func TestDelete(t *testing.T) {
+	store := New()
+
+	// Add some images.
+	addA, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgA)))
+	addB, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgB)))
+	hashA, _ := CreateHash(addA)
+	hashB, _ := CreateHash(addB)
+	store.Add("imgA", hashA)
+	store.Add("imgB", hashB)
+
+	// Delete one.
+	store.Delete("imgA")
+
+	// Query should only return imgB.
+	query, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgC)))
+	queryHash, _ := CreateHash(query)
+	matches := store.Query(queryHash)
+	if len(matches) != 1 {
+		t.Errorf("Invalid query result set size, expected 1, is %d", len(matches))
+		return
+	}
+	if matches[0].ID != "imgB" {
+		t.Errorf("Query found %s but should have found imgB", matches[0].ID)
+	}
+}
+
 // Used in the next test.
 type testID struct {
 	Asset  string

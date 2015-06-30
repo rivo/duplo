@@ -153,6 +153,41 @@ func (store *Store) Add(id interface{}, hash Hash) {
 	store.modified = true
 }
 
+// Delete removes an image from the store so it will not be returned during a
+// query anymore. Note that the candidate slot still remains occupied but its
+// index will be removed from all index lists. This also means that Size() will
+// not decrease. This is an expensive operation. If the provided ID could not be
+// found, nothing happens.
+func (store *Store) Delete(id interface{}) {
+	store.Lock()
+	defer store.Unlock()
+
+	// Get the index.
+	index, ok := store.ids[id]
+	if !ok {
+		return // ID was not found.
+	}
+	store.modified = true
+
+	// Clear the candidate.
+	store.candidates[index].id = nil
+
+	// Remove from all index lists.
+	for signIndex := range store.indices {
+		for coefIndex := range store.indices[signIndex] {
+			for colourIndex, list := range store.indices[signIndex][coefIndex] {
+				for indexIndex := range list {
+					if list[indexIndex] == index {
+						store.indices[signIndex][coefIndex][colourIndex] =
+							append(list[:indexIndex], list[indexIndex+1:]...)
+						break
+					}
+				}
+			}
+		}
+	}
+}
+
 // Query performs a similarity search on the given image hash and returns
 // all potential matches. The returned slice will not be sorted but implements
 // sort.Interface, which will sort it so the match with the best score is its
