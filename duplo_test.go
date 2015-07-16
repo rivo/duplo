@@ -155,9 +155,6 @@ func TestAddBasic(t *testing.T) {
 			break
 		}
 	}
-	if store.coefSize != 3 {
-		t.Errorf("Wrong coefficient size, expected 3, is %d", store.coefSize)
-	}
 	for sign, v1 := range store.indices {
 		for coefIndex, v2 := range v1 {
 			none := sign > 0 || coefIndex == 0

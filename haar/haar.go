@@ -9,32 +9,28 @@ import (
 	"math"
 )
 
-// Coef is the union of coefficients for all channels of the original image.
-type Coef []float64
+// We will be using three colour channels per pixel at all times.
+const ColourChannels = 3
 
-// Copy returns a distinct copy of this coefficient.
-func (coef Coef) Copy() Coef {
-	clone := make(Coef, len(coef))
-	copy(clone, coef)
-	return clone
-}
+// Coef is the union of coefficients for all channels of the original image.
+type Coef [ColourChannels]float64
 
 // Add adds another coefficient in place.
-func (coef Coef) Add(offset Coef) {
+func (coef *Coef) Add(offset Coef) {
 	for index := range coef {
 		coef[index] += offset[index]
 	}
 }
 
 // Subtract subtracts another coefficient in place.
-func (coef Coef) Subtract(offset Coef) {
+func (coef *Coef) Subtract(offset Coef) {
 	for index := range coef {
 		coef[index] -= offset[index]
 	}
 }
 
 // Divide divides all elements of the coefficient by a value, in place.
-func (coef Coef) Divide(value float64) {
+func (coef *Coef) Divide(value float64) {
 	factor := 1.0 / value
 	for index := range coef {
 		coef[index] *= factor // Slightly faster.
@@ -101,7 +97,7 @@ func Transform(img image.Image) Matrix {
 		for step := width / 2; step >= 1; step /= 2 {
 			for column := 0; column < step; column++ {
 				high := matrix.Coefs[row*width+2*column]
-				low := high.Copy()
+				low := high
 				offset := matrix.Coefs[row*width+2*column+1]
 				high.Add(offset)
 				low.Subtract(offset)
@@ -121,9 +117,9 @@ func Transform(img image.Image) Matrix {
 	for column := 0; column < width; column++ {
 		for step := height / 2; step >= 1; step /= 2 {
 			for row := 0; row < step; row++ {
-				high := matrix.Coefs[(2*row)*width+column].Copy()
-				low := high.Copy()
-				offset := matrix.Coefs[(2*row+1)*width+column].Copy()
+				high := matrix.Coefs[(2*row)*width+column]
+				low := high
+				offset := matrix.Coefs[(2*row+1)*width+column]
 				high.Add(offset)
 				low.Subtract(offset)
 				high.Divide(math.Sqrt2)

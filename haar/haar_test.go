@@ -9,11 +9,8 @@ import (
 
 const epsilon = 0.002
 
-// Whether or not the two slices are equal to an epsilon difference.
-func equal(slice1, slice2 []float64) bool {
-	if len(slice1) != len(slice2) {
-		return false
-	}
+// Whether or not the two coefficients are equal to an epsilon difference.
+func equal(slice1, slice2 Coef) bool {
 	for index := range slice1 {
 		if math.Abs(slice1[index]-slice2[index]) > epsilon {
 			return false
@@ -53,7 +50,7 @@ func floatsToCoefs(floats []float64) []Coef {
 // Test coefficients.
 func TestCoef(t *testing.T) {
 	coef := Coef{1, 2, 3}
-	copyCoef := coef.Copy()
+	copyCoef := coef
 	if !equal(copyCoef, Coef{1, 2, 3}) {
 		t.Errorf("Coef not a copy (%v instead of %v)", copyCoef, coef)
 	}

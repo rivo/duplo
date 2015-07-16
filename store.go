@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/gob"
 	"fmt"
+	"github.com/rivo/duplo/haar"
 	"math"
 	"sync"
 )
@@ -45,16 +46,12 @@ type Store struct {
 	// All IDs in the store, mapping to candidate indices.
 	ids map[interface{}]int
 
-	// The number of elements (colour channels) in a coefficient.
-	coefSize int
-
 	// indices is a matrix which contains references to the images in the
 	// store. At the tail of the matrix is an index into the candidates field.
 	// The dimensions of this matrix are as follows: coefficient sign (0=positive,
 	// 1=negative), coefficient index (from 0 to (ImageScale*ImageScale)-1),
-	// colour space (from 0 to coefSize-1). All of these dimensions specified, one
-	// will either find a nil slice (no images stored under that node) or a slice
-	// of indices in the candidates field.
+	// colour space (from 0 to haar.ColourChannels-1). All of these dimensions
+	// specified, one will either find a slice of indices in the candidates field.
 	indices [][][][]int
 
 	// Whether this store was modified since it was loaded/created.
@@ -69,6 +66,9 @@ func New() *Store {
 	store.indices = make([][][][]int, 2)
 	for index := range store.indices {
 		store.indices[index] = make([][][]int, ImageScale*ImageScale)
+		for coefIndex := range store.indices[index] {
+			store.indices[index][coefIndex] = make([][]int, haar.ColourChannels)
+		}
 	}
 
 	return store
@@ -102,17 +102,6 @@ func (store *Store) Add(id interface{}, hash Hash) {
 
 	// We need this for when we serialize the store.
 	gob.Register(id)
-
-	// We may not have enough space to add this image yet. If so, make some.
-	if len(hash.Thresholds) > store.coefSize {
-		for signIndex := range store.indices {
-			for coefIndex := range store.indices[signIndex] {
-				store.indices[signIndex][coefIndex] = append(store.indices[signIndex][coefIndex],
-					make([][]int, len(hash.Thresholds)-store.coefSize)...)
-			}
-		}
-	}
-	store.coefSize = len(hash.Thresholds)
 
 	// Make this image a candidate.
 	index := len(store.candidates)
@@ -328,8 +317,19 @@ func (store *Store) GobDecode(from []byte) error {
 		if err := decoder.Decode(&store.candidates[index].id); err != nil {
 			return fmt.Errorf("Unable to decode candidate ID: %s", err)
 		}
-		if err := decoder.Decode(&store.candidates[index].scaleCoef); err != nil {
-			return fmt.Errorf("Unable to decode candidate scaling function coefficient: %s", err)
+		if version < 2 {
+			// Version 1 had a different coefficient type (slice instead of array).
+			var coef []float64
+			if err := decoder.Decode(&coef); err != nil {
+				return fmt.Errorf("Unable to decode candidate scaling function coefficient: %s", err)
+			}
+			for i := range coef {
+				store.candidates[index].scaleCoef[i] = coef[i]
+			}
+		} else {
+			if err := decoder.Decode(&store.candidates[index].scaleCoef); err != nil {
+				return fmt.Errorf("Unable to decode candidate scaling function coefficient: %s", err)
+			}
 		}
 		if err := decoder.Decode(&store.candidates[index].ratio); err != nil {
 			return fmt.Errorf("Unable to decode candidate ratio: %s", err)
@@ -351,21 +351,17 @@ func (store *Store) GobDecode(from []byte) error {
 	}
 
 	// The coefficient size.
-	if err := decoder.Decode(&store.coefSize); err != nil {
-		return fmt.Errorf("Unable to decode coefficient size: %s", err)
+	if version < 2 {
+		// Version 1 had coefficient size in store.
+		var coefSize int
+		if err := decoder.Decode(&coefSize); err != nil {
+			return fmt.Errorf("Unable to decode coefficient size: %s", err)
+		}
 	}
 
 	// Indices.
 	if err := decoder.Decode(&store.indices); err != nil {
 		return fmt.Errorf("Unable to decode indices: %s", err)
-	}
-
-	// Complete the store.
-	store.coefSize = 0
-	for _, candidate := range store.candidates {
-		if size := len(candidate.scaleCoef); size > store.coefSize {
-			store.coefSize = size
-		}
 	}
 
 	return nil
@@ -381,7 +377,7 @@ func (store *Store) GobEncode() ([]byte, error) {
 	encoder := gob.NewEncoder(compressor)
 
 	// Add a version number first.
-	if err := encoder.Encode(1); err != nil {
+	if err := encoder.Encode(2); err != nil {
 		return nil, fmt.Errorf("Unable to encode store version: %s", err)
 	}
 
@@ -414,11 +410,6 @@ func (store *Store) GobEncode() ([]byte, error) {
 	// The ID set.
 	if err := encoder.Encode(store.ids); err != nil {
 		return nil, fmt.Errorf("Unable to encode ID set: %s", err)
-	}
-
-	// The coefficient size.
-	if err := encoder.Encode(store.coefSize); err != nil {
-		return nil, fmt.Errorf("Unable to encode coefficient size: %s", err)
 	}
 
 	// Indices.

@@ -106,7 +106,7 @@ func coefThresholds(coefs []haar.Coef, k int) haar.Coef {
 	}
 
 	// Select thresholds.
-	thresholds := make(haar.Coef, len(coefs[0]))
+	var thresholds haar.Coef
 	for index := range thresholds {
 		thresholds[index] = coefThreshold(coefs, k, index)
 	}
