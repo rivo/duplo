@@ -160,6 +160,7 @@ func (store *Store) Delete(id interface{}) {
 
 	// Clear the candidate.
 	store.candidates[index].id = nil
+	delete(store.ids, id)
 
 	// Remove from all index lists.
 	for signIndex := range store.indices {
