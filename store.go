@@ -10,11 +10,13 @@ import (
 	"sync"
 )
 
-var (
+const (
 	// ImageScale is the width and height to which images are resized before they
-	// are being processed. Change this only once when the package is initialized.
-	ImageScale uint = 128
+	// are being processed.
+	ImageScale = 128
+)
 
+var (
 	// TopCoefs is the number of top coefficients (per colour channel), ordered
 	// by absolute value, that will be kept. Coefficients that rank lower will
 	// be discarded. Change this only once when the package is initialized.
@@ -35,6 +37,10 @@ var (
 // hashes and references to the images but the images themselves are not held
 // in the data structure.
 //
+// A general limit to the store is that it can hold no more than 4,294,967,295
+// images. This is to save RAM space but may be easy to extend by modifying its
+// data structures to hold uint64 indices instead of uint32 indices.
+//
 // Store's methods are concurrency safe. Store implements the GobDecoder and
 // GobEncoder interfaces.
 type Store struct {
@@ -44,15 +50,20 @@ type Store struct {
 	candidates []candidate
 
 	// All IDs in the store, mapping to candidate indices.
-	ids map[interface{}]int
+	ids map[interface{}]uint32
 
-	// indices is a matrix which contains references to the images in the
-	// store. At the tail of the matrix is an index into the candidates field.
-	// The dimensions of this matrix are as follows: coefficient sign (0=positive,
-	// 1=negative), coefficient index (from 0 to (ImageScale*ImageScale)-1),
-	// colour space (from 0 to haar.ColourChannels-1). All of these dimensions
-	// specified, one will either find a slice of indices in the candidates field.
-	indices [][][][]int
+	// indices  contains references to the images in the store. It is a slice
+	// of slices which contains image indices (into the "candidates" slice).
+	// Use the following formula to access an index slice:
+	//
+	//		s := store.indices[sign*ImageScale*ImageScale*haar.ColourChannels + coefIdx*haar.ColourChannels + channel]
+	//
+	// where the variables are as follows:
+	//
+	//		* sign: Either 0 (positive) or 1 (negative)
+	//		* coefIdx: The index of the coefficient (from 0 to (ImageScale*ImageScale)-1)
+	//		* channel: The colour channel (from 0 to haar.ColourChannels-1)
+	indices [][]uint32
 
 	// Whether this store was modified since it was loaded/created.
 	modified bool
@@ -62,14 +73,8 @@ type Store struct {
 func New() *Store {
 	store := new(Store)
 
-	store.ids = make(map[interface{}]int)
-	store.indices = make([][][][]int, 2)
-	for index := range store.indices {
-		store.indices[index] = make([][][]int, ImageScale*ImageScale)
-		for coefIndex := range store.indices[index] {
-			store.indices[index][coefIndex] = make([][]int, haar.ColourChannels)
-		}
-	}
+	store.ids = make(map[interface{}]uint32)
+	store.indices = make([][]uint32, 2*ImageScale*ImageScale*haar.ColourChannels)
 
 	return store
 }
@@ -112,7 +117,7 @@ func (store *Store) Add(id interface{}, hash Hash) {
 		hash.DHash,
 		hash.Histogram,
 		hash.HistoMax})
-	store.ids[id] = index
+	store.ids[id] = uint32(index)
 
 	// Distribute candidate index into the buckets.
 	for coefIndex, coef := range hash.Coefs {
@@ -133,8 +138,8 @@ func (store *Store) Add(id interface{}, hash Hash) {
 			}
 
 			// Add this image's index to the bucket.
-			store.indices[sign][coefIndex][colourIndex] =
-				append(store.indices[sign][coefIndex][colourIndex], index)
+			location := sign*ImageScale*ImageScale*haar.ColourChannels + coefIndex*haar.ColourChannels + colourIndex
+			store.indices[location] = append(store.indices[location], uint32(index))
 		}
 	}
 
@@ -163,16 +168,11 @@ func (store *Store) Delete(id interface{}) {
 	delete(store.ids, id)
 
 	// Remove from all index lists.
-	for signIndex := range store.indices {
-		for coefIndex := range store.indices[signIndex] {
-			for colourIndex, list := range store.indices[signIndex][coefIndex] {
-				for indexIndex := range list {
-					if list[indexIndex] == index {
-						store.indices[signIndex][coefIndex][colourIndex] =
-							append(list[:indexIndex], list[indexIndex+1:]...)
-						break
-					}
-				}
+	for location, list := range store.indices {
+		for indexIndex := range list {
+			if list[indexIndex] == index {
+				store.indices[location] = append(list[:indexIndex], list[indexIndex+1:]...)
+				break
 			}
 		}
 	}
@@ -230,7 +230,8 @@ func (store *Store) Query(hash Hash) Matches {
 				sign = 1
 			}
 
-			for _, index := range store.indices[sign][coefIndex][colourIndex] {
+			location := sign*ImageScale*ImageScale*haar.ColourChannels + coefIndex*haar.ColourChannels + colourIndex
+			for _, index := range store.indices[location] {
 				// Do we know this index already?
 				if math.IsNaN(scores[index]) {
 					// No. Calculate initial score.
@@ -347,8 +348,19 @@ func (store *Store) GobDecode(from []byte) error {
 	}
 
 	// The ID set.
-	if err := decoder.Decode(&store.ids); err != nil {
-		return fmt.Errorf("Unable to decode ID set: %s", err)
+	if version < 3 {
+		// Versions 1 and 2 used "int" indices. We need to convert.
+		ids := make(map[interface{}]int)
+		if err := decoder.Decode(&ids); err != nil {
+			return fmt.Errorf("Unable to decode ID set: %s", err)
+		}
+		for key, value := range ids {
+			store.ids[key] = uint32(value)
+		}
+	} else {
+		if err := decoder.Decode(&store.ids); err != nil {
+			return fmt.Errorf("Unable to decode ID set: %s", err)
+		}
 	}
 
 	// The coefficient size.
@@ -361,8 +373,28 @@ func (store *Store) GobDecode(from []byte) error {
 	}
 
 	// Indices.
-	if err := decoder.Decode(&store.indices); err != nil {
-		return fmt.Errorf("Unable to decode indices: %s", err)
+	if version < 3 {
+		// Versions 1 and 2 used "int" indices and a 4D matrix. We need to convert.
+		var indices [][][][]int
+		if err := decoder.Decode(&indices); err != nil {
+			return fmt.Errorf("Unable to decode indices: %s", err)
+		}
+		for sign, s1 := range indices {
+			for coefIndex, s2 := range s1 {
+				for colourIndex, indexSlice := range s2 {
+					location := sign*ImageScale*ImageScale*haar.ColourChannels + coefIndex*haar.ColourChannels + colourIndex
+					store.indices[location] = make([]uint32, len(indexSlice))
+					for i, index := range indexSlice {
+						store.indices[location][i] = uint32(index)
+					}
+				}
+			}
+		}
+		store.modified = true
+	} else {
+		if err := decoder.Decode(&store.indices); err != nil {
+			return fmt.Errorf("Unable to decode indices: %s", err)
+		}
 	}
 
 	return nil
@@ -378,7 +410,7 @@ func (store *Store) GobEncode() ([]byte, error) {
 	encoder := gob.NewEncoder(compressor)
 
 	// Add a version number first.
-	if err := encoder.Encode(2); err != nil {
+	if err := encoder.Encode(3); err != nil {
 		return nil, fmt.Errorf("Unable to encode store version: %s", err)
 	}
 

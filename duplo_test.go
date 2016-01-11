@@ -155,26 +155,28 @@ func TestAddBasic(t *testing.T) {
 			break
 		}
 	}
-	for sign, v1 := range store.indices {
-		for coefIndex, v2 := range v1 {
-			none := sign > 0 || coefIndex == 0
-			// We occupy all 2499 indices because with all zeroes, there is no
-			// "top 40" and thus all zeros are saved.
-			for colour, v3 := range v2 {
+	// We occupy all 2499 indices because with all zeroes, there is no
+	// "top 40" and thus all zeros are saved.
+	for sign := 0; sign <= 1; sign++ {
+		for coefIndex := 0; coefIndex < ImageScale*ImageScale; coefIndex++ {
+			for colourIndex := 0; colourIndex < haar.ColourChannels; colourIndex++ {
+				none := sign > 0 || coefIndex == 0
+				location := sign*ImageScale*ImageScale*haar.ColourChannels + coefIndex*haar.ColourChannels + colourIndex
+				indexList := store.indices[location]
 				if none {
-					if len(v3) != 0 {
-						t.Errorf("Non-empty index list found for sign %d, coefficient %d, colour %d: %v", sign, coefIndex, colour, v3)
+					if len(indexList) != 0 {
+						t.Errorf("Non-empty index list found for sign %d, coefficient %d, colour %d: %v", sign, coefIndex, colourIndex, indexList)
 						return
 					}
 				}
 				if !none {
-					if len(v3) != 1 {
-						t.Errorf("Wrong/zero size index list found for sign %d, coefficient %d, colour %d, should be length 1: %v", sign, coefIndex, colour, v3)
+					if len(indexList) != 1 {
+						t.Errorf("Wrong/zero size index list found for sign %d, coefficient %d, colour %d, should be length 1: %v", sign, coefIndex, colourIndex, indexList)
 						return
 					}
-					for index, v4 := range v3 {
-						if v4 != 0 {
-							t.Errorf("Wrong index found for sign %d, coefficient %d, colour %d, position %d, should be 0, is %d", sign, coefIndex, colour, index, v4)
+					for i, index := range indexList {
+						if index != 0 {
+							t.Errorf("Wrong index found for sign %d, coefficient %d, colour %d, position %d, should be 0, is %d", sign, coefIndex, colourIndex, i, index)
 							return
 
 						}
@@ -199,12 +201,8 @@ func TestQuery(t *testing.T) {
 
 	// Some plausibility checks.
 	coefCount := 0
-	for _, v1 := range store.indices {
-		for _, v2 := range v1 {
-			for _, indices := range v2 {
-				coefCount += len(indices)
-			}
-		}
+	for _, indices := range store.indices {
+		coefCount += len(indices)
 	}
 	if coefCount != 2*(TopCoefs-1)*3 {
 		t.Errorf("Unexpected number of bucket indices, %d instead of %d", coefCount, 2*TopCoefs*3)
@@ -318,31 +316,15 @@ func TestGob(t *testing.T) {
 		t.Errorf("Index number of signs not identical: %d vs %d", l1, l2)
 		return
 	}
-	for i1, v1 := range storeReloaded.indices {
-		v2 := store.indices[i1]
-		if l1, l2 := len(v1), len(v2); l1 != l2 {
-			t.Errorf("Index number of coefficients not identical: %d vs %d (sign %d)", l1, l2, i1)
+	for location, indices := range storeReloaded.indices {
+		if l1, l2 := len(indices), len(store.indices[location]); l1 != l2 {
+			t.Errorf("Reloaded index slice at %d is of length %d, expected %d", location, l1, l2)
 			return
 		}
-		for i2, v3 := range v1 {
-			v4 := v2[i2]
-			if l1, l2 := len(v3), len(v4); l1 != l2 {
-				t.Errorf("Index number of colour channels not identical: %d vs %d (sign %d, coefficient %d)", l1, l2, i1, i2)
+		for i, index := range indices {
+			if index != store.indices[location][i] {
+				t.Errorf("Reloaded index at %d[%d] is %d, expected %d", location, i, index, store.indices[location][i])
 				return
-			}
-			for i3, v5 := range v3 {
-				v6 := v4[i3]
-				if l1, l2 := len(v5), len(v6); l1 != l2 {
-					t.Errorf("Index number of indices not identical: %d vs %d (sign %d, coefficient %d, colour %d)", l1, l2, i1, i2, i3)
-					return
-				}
-				for i4, v7 := range v5 {
-					v8 := v6[i4]
-					if v7 != v8 {
-						t.Errorf("Index not identical: %d vs %d (sign %d, coefficient %d, colour %d, index %d)", v7, v8, i1, i2, i3, i4)
-						return
-					}
-				}
 			}
 		}
 	}
