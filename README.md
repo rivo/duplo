@@ -29,6 +29,10 @@ sort.Sort(matches)
 // matches[0] is the best match.
 ```
 
+## Documentation
+
+http://godoc.org/github.com/rivo/duplo
+
 ## Possible Applications
 
 * Identify copyright violations
