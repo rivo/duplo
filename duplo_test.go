@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 	"fmt"
-	"github.com/rivo/duplo/haar"
 	"image"
 	"image/color"
 	"image/draw"
@@ -14,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/rivo/duplo/haar"
 )
 
 const (
@@ -139,19 +140,19 @@ func TestAddBasic(t *testing.T) {
 		t.Errorf("Store has %d candidates, 1 expected", size)
 		return
 	}
-	candidate := store.candidates[0]
-	if candidate.id != id {
-		t.Errorf("Wrong candidate ID, expected %v, is %v", id, candidate.id)
+	cand := store.candidates[0]
+	if cand.id != id {
+		t.Errorf("Wrong candidate ID, expected %v, is %v", id, cand.id)
 	}
 	expected := haar.Coef{0.67785, 0.251048, 0.939454}
-	t.Logf("Candidate: %v", candidate)
-	if size := len(candidate.scaleCoef); size != 3 {
+	t.Logf("Candidate: %v", cand)
+	if size := len(cand.scaleCoef); size != 3 {
 		t.Errorf("Wrong scaling function coefficient size, expected 3, is %d", size)
 		return
 	}
-	for index := range candidate.scaleCoef {
-		if math.Abs(expected[index]-candidate.scaleCoef[index]) >= 0.000001 {
-			t.Errorf("Scaling function coefficient mismatch, expected %v, is %v", expected, candidate.scaleCoef)
+	for index := range cand.scaleCoef {
+		if math.Abs(expected[index]-cand.scaleCoef[index]) >= 0.000001 {
+			t.Errorf("Scaling function coefficient mismatch, expected %v, is %v", expected, cand.scaleCoef)
 			break
 		}
 	}
@@ -246,6 +247,105 @@ func TestDelete(t *testing.T) {
 	}
 	if matches[0].ID != "imgB" {
 		t.Errorf("Query found %s but should have found imgB", matches[0].ID)
+	}
+}
+
+// Test the ID enumeration function.
+func TestIDs(t *testing.T) {
+	store := New()
+
+	// Add some images.
+	addA, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgA)))
+	addB, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgB)))
+	hashA, _ := CreateHash(addA)
+	hashB, _ := CreateHash(addB)
+	store.Add("imgA", hashA)
+	store.Add("imgB", hashB)
+
+	// A comparison helper.
+	compare := func(expected, computed []interface{}) bool {
+		if len(computed) != len(expected) {
+			t.Errorf("Invalid ID slice length, expected %d, is %d", len(expected), len(computed))
+			return true
+		}
+	ExpLoop:
+		for _, id := range expected {
+			for _, checkID := range computed {
+				if id == checkID {
+					continue ExpLoop
+				}
+			}
+			t.Errorf("ID %s not found", id)
+			return true
+		}
+		return false
+	}
+
+	// First enumeration.
+	ids := store.IDs()
+	if compare([]interface{}{"imgA", "imgB"}, ids) {
+		return
+	}
+
+	// Delete one.
+	store.Delete("imgA")
+
+	// Second enumeration.
+	ids = store.IDs()
+	compare([]interface{}{"imgB"}, ids)
+}
+
+// Test the ID exchange function.
+func TestExchange(t *testing.T) {
+	store := New()
+
+	// Add some images.
+	addA, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgA)))
+	addB, _ := jpeg.Decode(base64.NewDecoder(base64.StdEncoding, strings.NewReader(imgB)))
+	hashA, _ := CreateHash(addA)
+	hashB, _ := CreateHash(addB)
+	store.Add("imgA", hashA)
+	store.Add("imgB", hashB)
+
+	// Test failure to find original ID.
+	if err := store.Exchange("does not exist", "is irrelevant"); err != nil {
+		t.Errorf("Exchange returned with unexpected error message: %s", err)
+		return
+	}
+	if len(store.ids) != 2 {
+		t.Errorf("Failed exchange modified store length, expected 2, is %d", len(store.ids))
+		return
+	}
+
+	// Test failure to rename into existing ID.
+	if err := store.Exchange("imgA", "imgB"); err == nil {
+		t.Error("Exchange into existing ID did not fail")
+		return
+	}
+
+	// Now rename and check result.
+	if err := store.Exchange("imgA", "imgC"); err != nil {
+		t.Error(err)
+		return
+	}
+	if len(store.ids) != 2 {
+		t.Errorf("Successful exchange modified store length, expected 2, is %d", len(store.ids))
+		return
+	}
+	if _, ok := store.ids["imgA"]; ok {
+		t.Error(`ID "imgA" still found despite exchange`)
+		return
+	}
+	if _, ok := store.ids["imgC"]; !ok {
+		t.Error(`ID "imgC" not found despite exchange`)
+		return
+	}
+	if store.candidates[0].id != "imgC" {
+		t.Errorf(`Candidate 0 ID is not "imgC" but "%s"`, store.candidates[0].id)
+		return
+	}
+	if _, ok := store.ids["imgB"]; !ok {
+		t.Error(`ID "imgB" not found after exchange`)
 	}
 }
 

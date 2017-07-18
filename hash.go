@@ -1,13 +1,14 @@
 package duplo
 
 import (
-	"github.com/nfnt/resize"
-	"github.com/rivo/duplo/haar"
 	"image"
 	"image/color"
 	"math"
 	"math/rand"
 	"sort"
+
+	"github.com/nfnt/resize"
+	"github.com/rivo/duplo/haar"
 )
 
 // Hash represents the visual hash of an image.
@@ -66,7 +67,11 @@ func CreateHash(img image.Image) (Hash, image.Image) {
 	// Create histogram bit vector.
 	h, hm := histogram(img)
 
-	return Hash{haar.Matrix{matrix.Coefs, ImageScale, ImageScale}, thresholds, ratio, d, h, hm}, scaled
+	return Hash{haar.Matrix{
+		Coefs:  matrix.Coefs,
+		Width:  ImageScale,
+		Height: ImageScale,
+	}, thresholds, ratio, d, h, hm}, scaled
 }
 
 // coefThreshold returns, for the given coefficients, the kth largest absolute

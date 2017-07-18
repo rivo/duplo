@@ -5,9 +5,10 @@ import (
 	"compress/gzip"
 	"encoding/gob"
 	"fmt"
-	"github.com/rivo/duplo/haar"
 	"math"
 	"sync"
+
+	"github.com/rivo/duplo/haar"
 )
 
 const (
@@ -147,6 +148,19 @@ func (store *Store) Add(id interface{}, hash Hash) {
 	store.modified = true
 }
 
+// IDs returns a list of IDs of all images contained in the store. This list is
+// created during the call so it may be modified without affecting the store.
+func (store *Store) IDs() (ids []interface{}) {
+	store.Lock()
+	defer store.Unlock()
+
+	for id := range store.ids {
+		ids = append(ids, id)
+	}
+
+	return
+}
+
 // Delete removes an image from the store so it will not be returned during a
 // query anymore. Note that the candidate slot still remains occupied but its
 // index will be removed from all index lists. This also means that Size() will
@@ -176,6 +190,35 @@ func (store *Store) Delete(id interface{}) {
 			}
 		}
 	}
+}
+
+// Exchange exchanges the ID of an image for a new one. If the old ID could not
+// be found, nothing happens. If the new ID already existed prior to the
+// exchange, an error is returned.
+func (store *Store) Exchange(oldID, newID interface{}) error {
+	store.Lock()
+	defer store.Unlock()
+
+	// Get the old index.
+	index, ok := store.ids[oldID]
+	if !ok {
+		return nil // ID was not found.
+	}
+
+	// Check if the new ID already exists.
+	if _, ok := store.ids[newID]; ok {
+		return fmt.Errorf("Cannot exchange ID, %s already exists", newID)
+	}
+
+	// Update the map.
+	delete(store.ids, oldID)
+	store.ids[newID] = index
+
+	// Update the candidate.
+	store.candidates[index].id = newID
+
+	store.modified = true
+	return nil
 }
 
 // Query performs a similarity search on the given image hash and returns
