@@ -93,7 +93,7 @@ func TestSingleRow(t *testing.T) {
 	output := Transform(input)
 
 	expected := Matrix{
-		Coefs:  []Coef{Coef{0.08}, Coef{-0.02}, Coef{.02 / math.Sqrt2}, Coef{0}},
+		Coefs:  []Coef{{0.08}, {-0.02}, {.02 / math.Sqrt2}, {0}},
 		Width:  4,
 		Height: 1}
 

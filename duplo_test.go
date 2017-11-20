@@ -100,18 +100,18 @@ const (
 // Test the QuickSelect algorithm.
 func TestQuickSelect(t *testing.T) {
 	coefs := []haar.Coef{
-		haar.Coef{1, -5},
-		haar.Coef{2, 2},
-		haar.Coef{3, -7.5},
-		haar.Coef{4, 1},
-		haar.Coef{5, 0},
-		haar.Coef{6, 6},
-		haar.Coef{7, -3},
-		haar.Coef{8, -9},
-		haar.Coef{9, 4.7},
-		haar.Coef{10, 4.7},
-		haar.Coef{11, 8},
-		haar.Coef{12, -2.2},
+		{1, -5},
+		{2, 2},
+		{3, -7.5},
+		{4, 1},
+		{5, 0},
+		{6, 6},
+		{7, -3},
+		{8, -9},
+		{9, 4.7},
+		{10, 4.7},
+		{11, 8},
+		{12, -2.2},
 	}
 
 	thresholds := coefThresholds(coefs, 4)
@@ -138,6 +138,10 @@ func TestAddBasic(t *testing.T) {
 	// has been built properly.
 	if size := len(store.candidates); size != 1 {
 		t.Errorf("Store has %d candidates, 1 expected", size)
+		return
+	}
+	if !store.Has(id) {
+		t.Errorf("Candidate was not found")
 		return
 	}
 	cand := store.candidates[0]

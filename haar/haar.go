@@ -9,7 +9,8 @@ import (
 	"math"
 )
 
-// We will be using three colour channels per pixel at all times.
+// ColourChannels is the number of channels for one color. We will be using
+// three colour channels per pixel at all times.
 const ColourChannels = 3
 
 // Coef is the union of coefficients for all channels of the original image.
@@ -65,7 +66,7 @@ func colorToCoef(gen color.Color) Coef {
 		(0.211456*r - 0.522591*g + 0.311135*b) / 0x100}
 }
 
-// Transform performs a foward 2D Haar transform on the provided image after
+// Transform performs a forward 2D Haar transform on the provided image after
 // converting it to YIQ space.
 func Transform(img image.Image) Matrix {
 	bounds := img.Bounds()
