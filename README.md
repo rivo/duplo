@@ -42,6 +42,10 @@ http://godoc.org/github.com/rivo/duplo
 * Save disk space by detecting and removing duplicate images
 * Search for images by similarity
 
+## Projects Using This Package
+
+* [imgdup2go](https://github.com/rif/imgdup2go): A visual image duplicate finder.
+
 ## More Information
 
 For more information, please go to http://rentafounder.com/find-similar-images-with-duplo/ or get in touch.
